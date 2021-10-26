@@ -1,12 +1,9 @@
+# Author: Kyle White
+# Class: CS460 - Machine Learning
+# Date: 10/29/2021
+
 import pandas as pd
 import numpy as np
-
-tennis_df = pd.read_csv("assets/playtennis_dayremoved.csv")
-census_df = pd.read_csv("assets/census_training.csv")
-emails_df = pd.read_csv("assets/emails_noID.csv")
-
-print(tennis_df)
-print(emails_df)
 
 def getEntropy(df):
     # To make this function generic, get the class label
@@ -78,25 +75,31 @@ def getInfoGain (df, attr):
 # Returns the best feature in a particular dataset or partition of a data set
 # for partitioning, based on information gain.
 def bestFeature(df, features):
+    # Initialize a dictionary for info gain from each feature
     infoGain = {}
+    # Current counter
     current = 0
+    # Maximum counter
     maximum = 0
+    # Maximum attribute string
     maxAttr = ""
+    # Loop through feature
     for attr in features:
-        # infoGain.append(getInfoGain(df,attr))
+        # Set current to information gain from df, attr (current feature)
         current = getInfoGain(df, attr)
+        # Append attribute to current index of infoGain dictionary
         infoGain[current] = attr
+        # If current > maximum, set maximum to current and maxAttr to current attribute
         if current > maximum:
             maximum = current
             maxAttr = attr
+    # If current is equal to maximum, return the first element because they are all the same
+    # This splits the difference when coming to the case where two identical queries result in different
+    # class values
     if current == maximum:
+        # Possibly update to fix
         best = features[0]
         return best
-    # keys = infoGain.keys()
-    # keys = list(map(float, keys))
-    # # maximum = np.argmax(keys)
-    # best = infoGain[maximum]
-    # best = features[np.argmax(infoGain)]
     return maxAttr
 
 def mostCommonValue(df, className):
@@ -113,7 +116,7 @@ def mostCommonValue(df, className):
         maxIndex += 1
     return mostCommon
 
-def buildTree(df, features, parentNode):
+def buildTree(df, features, parentNode, pruning):
     # Get the target class name
     className = df.keys()[-1]
     
@@ -123,8 +126,7 @@ def buildTree(df, features, parentNode):
     index = targetValues.index
     
     # Length of the dataset
-    # rows = len(df)
-    rows = df.shape[0]
+    rows = len(df)
     
     # Base cases:
     if index.size == 1:
@@ -140,11 +142,11 @@ def buildTree(df, features, parentNode):
         # All features along this path have been tested (no more features to split on)
         mostCommon = mostCommonValue(df, className)
         return mostCommon
-# TREE PRUNING:
-    # elif rows <= 30:
-    #     # This is tree pruning
-    #     mostCommon = mostCommonValue(df, className)
-    #     return mostCommon
+    elif rows <= 30 and pruning == True:
+        # If the partition is <= 30 rows long, find the most common value in the data set and set that
+        # as the leaf node. Pruning!
+        mostCommon = mostCommonValue(df, className)
+        return mostCommon
     else:
         # Recursive case:
         # Get the best feature for splitting the data set using information gain
@@ -159,83 +161,61 @@ def buildTree(df, features, parentNode):
         # Get unique values of the best feature
         uniqueValues = df[best].unique()
         
-        # Build the tree by 
+        # Build the tree by looping through uniqueValues, partitioning, and initiating the recursive call. 
         for val in uniqueValues:
             parent = df.copy()
-            
             # Create a partition
             indexBool = df[best] == val
             partition = df[indexBool]
-            
-            subtree = buildTree(partition, features, parent)
+            #Begin the recursion
+            subtree = buildTree(partition, features, parent, pruning)
             root[best][val] = subtree
         
         return root
 
-
-
-
-print(getInfoGain(tennis_df,'Outlook'))
-print(getInfoGain(tennis_df,'Temperature'))
-print(getInfoGain(tennis_df,'Humidity'))
-print(getInfoGain(tennis_df,'Wind'))
-
-# print(bestFeature(tennis_df))
-
-# t = buildTree(tennis_df)
-# print(t)
-
-# import pprint
-
-# pprint.pprint(t)
-
-print()
-# split = split(tennis_df, bestFeature(tennis_df),'Rain')
-# print(split)
-# print(np.unique(split['PlayTennis'], return_counts=True))
-className = census_df.keys()[-1]
-targetValues = pd.value_counts(census_df[className].values.ravel())
-seriesIndex = targetValues.index
-
-print(targetValues)
-print()
-print(seriesIndex)
-print()
-# print(mostCommonValue(tennis_df, 'PlayTennis'))
-
-attributes = tennis_df.keys()[:-1]
-parentNode = None
-t = buildTree(tennis_df, attributes, parentNode)
-print(t)
-
-# print()
-# emailAttr = emails_df.keys()[:-1]
-# parentNodeEmails = None
-# emailTree = buildTree(emails_df, emailAttr, parentNodeEmails)
-# print(emailTree)
-
-# print(bestFeature(census_df))
-
-# census_df = pd.read_csv("assets/census_training.csv")
-
-# print()
-# censusAttr = census_df.keys()[:-1]
-# parentNodeCensus = None
-# censusTree = buildTree(census_df, censusAttr, parentNodeCensus)
-# print(censusTree)
-
-def predict(tree, instance):
-    if not isinstance(tree, dict): #if it is leaf node
-        return tree #return the value
+def predict(tree, row):
+    # If it is a leaf node
+    if not isinstance(tree, dict):
+        # Return value
+        return tree
     else:
-        root_node = next(iter(tree)) #getting first key/feature name of the dictionary
-        feature_value = instance[root_node] #value of the feature
-        if feature_value in tree[root_node]: #checking the feature value in current tree node
-            return predict(tree[root_node][feature_value], instance) #goto next feature
+        # Get the root feature name from the tree
+        root_node = next(iter(tree))
+        # Get the value of the feature
+        feature_value = row[root_node]
+        # Check the feature value in the current tree node
+        if feature_value in tree[root_node]:
+            # Go to next feature
+            return predict(tree[root_node][feature_value], row)
         else:
-            return None
+            return predict(tree[root_node][list(tree[root_node].keys())[0]], row)
 
-query = ['age3','State-gov','college','high-education',	
-       'Never-married','Adm-clerical','Not-in-family','White','Male','full-time','United-States']
-instance = pd.Series(query)
-print(predict(censusTree, instance))
+def compareAgainst(df, tree):
+    print("---------- TESTING STARTED ----------")
+    print()
+    className = df.keys()[-1]
+    rows = len(df)
+    correct = 0
+    for i in range(rows):
+        rowClassValue = df.loc[i, className]
+        prediction = predict(tree, df.loc[i])
+        
+        if rowClassValue == prediction:
+            correct += 1
+    incorrect = rows - correct
+    print("Number of testing examples: " + str(rows))
+    print("Correct classificaton count: " + str(correct))
+    print("Incorrect classification count: " + str(incorrect))
+    accuracy = (correct/rows)*100
+    print("Accuracy = " + str(accuracy) + "%")
+    print()
+    print("----------- TESTING ENDED -----------")
+
+def treeBuilder(df, pruning):
+    rows = len(df)
+    print("---------- Training started on " + str(rows) + " examples with pruning = " + str(pruning) + ". -----------")
+    attributes = df.keys()[:-1]
+    parentNode = None
+    tree = buildTree(df, attributes, parentNode, pruning)
+    print("---------------------------- Finished training. ------------------------------")
+    return tree
