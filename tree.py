@@ -105,7 +105,6 @@ def bestFeature(df, features):
     # This splits the difference when coming to the case where two identical queries result in different
     # class values
     if current == maximum:
-        # Possibly update to fix
         best = features[0]
         return best
     return maxAttr
@@ -117,19 +116,29 @@ for partitioning, based on information gain.
 :return: the best feature for data partitioning as a string.
 """
 
-def mostCommonValue(df, className):
+def majority(df, className):
+    # Get a series containing each target level and their associated quantities
     targetValues = pd.value_counts(df[className].values.ravel())
+    # Get the labels within target values (yes or no, etc.)
     index = targetValues.index
 
-    mostCommon = index[0]
+    # Set most common to the first one
+    majority = index[0]
+    # Counter to keep track of current target quantity
     count = 0
+    # Index of maximum value
     maxIndex = 0
+    # Loop through target values to find which one has the most occurrences
     for val in targetValues:
+        # If the val > count
         if val > count:
+            # Set count to val
             count = val
-            mostCommon = index[maxIndex]
+            # Set most common to the current index
+            majority = index[maxIndex]
+        # Increment maxIndex
         maxIndex += 1
-    return mostCommon
+    return majority
 """
 Helper function that returns the most common feature in a pandas dataframe. Useful
 in building the decision tree using ID3.
@@ -144,55 +153,50 @@ def buildTree(df, features, parentNode, pruning):
 
     # targetValues is a series containing each target level and their associated quantities
     targetValues = pd.value_counts(df[className].values.ravel())
-    # index is the labels within target values (yes or no)
+    # index is the labels within target values (yes or no, etc.)
     index = targetValues.index
 
-    # Length of the dataset
+    # Length of the dataset (for pruning)
     rows = len(df)
 
     # Base cases:
     if index.size == 1:
-        # All remaining instances in the partition have the same value (yes or no)
-        # We reached the end of this tree branch. This becomes a leaf node with the class value
+        # All instances in the partition have the same target level (yes or no),
+        # return a leaf node with the label of this target level (class value).
         return index[0]
-    elif df.empty:
-        # For a particular partition, there are no instances that have a feature value
-        # Return the most common class value of the dataset of the parent node
-        mostCommon = mostCommonValue(parentNode, className)
-        return mostCommon
     elif len(features) == 0:
-        # All features along this path have been tested (no more features to split on)
-        mostCommon = mostCommonValue(df, className)
-        return mostCommon
+        # If features list is empty, return a leaf node with the label of
+        # the majority class value in this partition.
+        return majority(df, className)
+    elif df.empty:
+        # If this partition is empty, return a leaf node with the label of the majority
+        # target class value in the parent of this partition.
+        return majority(parentNode, className)
     elif rows <= 30 and pruning == True:
-        # If the partition is <= 30 rows long, find the most common value in the data set and set that
-        # as the leaf node. Pruning!
-        mostCommon = mostCommonValue(df, className)
-        return mostCommon
+        # If the partition is <= 30 rows long, find the most common class value in this
+        # partition and set that as the leaf node. Pruning! Enabled via pruning boolean.
+        return majority(df, className)
     else:
-        # Recursive case:
+    # Recursive case:
         # Get the best feature for splitting the data set using information gain
         best = bestFeature(df, features)
-
         # Create a root node of this section of the tree using best feature.
         root = {best : {}}
-
         # Remove best from the list of features
-        features = [i for i in features if i != best]
-
+        features = [feature for feature in features if feature != best]
         # Get unique values of the best feature
         uniqueValues = df[best].unique()
 
         # Build the tree by looping through uniqueValues, partitioning, and initiating the recursive call.
         for val in uniqueValues:
+            # Create a copy of the current partition to keep as a parent node for use in the base cases.
             parent = df.copy()
             # Create a partition
-            indexBool = df[best] == val
-            partition = df[indexBool]
-            #Begin the recursion
+            partition = df.where(df[best] == val).dropna()
+            # Begin the recursion
             subtree = buildTree(partition, features, parent, pruning)
+            # Assign the subtree to best,val indices of the root
             root[best][val] = subtree
-
         return root
 """
 Tree building function that uses the ID3 algorithm to build a decision tree using the previously defined
@@ -211,15 +215,15 @@ def predict(tree, row):
         return tree
     else:
         # Get the root feature name from the tree
-        root_node = next(iter(tree))
+        root = next(iter(tree))
         # Get the value of the feature
-        feature_value = row[root_node]
+        featureValue = row[root]
         # Check the feature value in the current tree node
-        if feature_value in tree[root_node]:
+        if featureValue in tree[root]:
             # Go to next feature
-            return predict(tree[root_node][feature_value], row)
+            return predict(tree[root][featureValue], row)
         else:
-            return predict(tree[root_node][list(tree[root_node].keys())[0]], row)
+            return predict(tree[root][list(tree[root].keys())[0]], row)
 """
 This function accepts a completed decision tree nested dictionary object, as well as
 a row of a pandas dataframe (as a series object) and queries the decision tree to
@@ -232,19 +236,26 @@ determine the predicted class value.
 def compareAgainst(df, tree):
     print("---------- TESTING STARTED ----------")
     print()
+    # Obtain class label name from dataframe (last column name)
     className = df.keys()[-1]
     rows = len(df)
+    # Counter to track correct predictions
     correct = 0
+    # Loop through the entire dataframe
     for i in range(rows):
+        # Gather the entire row as a series
         rowClassValue = df.loc[i, className]
+        # Pass series into predict function to get prediction value as a string
         prediction = predict(tree, df.loc[i])
-
+        # If the dataframe class value and prediction are equal, increment correct counter.
         if rowClassValue == prediction:
             correct += 1
+    # Calculate incorrect values
     incorrect = rows - correct
     print("Number of testing examples: " + str(rows))
     print("Correct classificaton count: " + str(correct))
     print("Incorrect classification count: " + str(incorrect))
+    # Calculate accuracy percentage
     accuracy = (correct/rows)*100
     print("Accuracy = " + str(accuracy) + "%")
     print()
@@ -261,9 +272,12 @@ determined by the prediction function and the decision tree.
 def treeBuilder(df, pruning):
     rows = len(df)
     print("---------- Training started on " + str(rows) + " examples with pruning = " + str(pruning) + ". -----------")
-    attributes = df.keys()[:-1]
+    # Create list of features
+    features = df.keys()[:-1]
+    # Set parent to None - no parent yet
     parentNode = None
-    tree = buildTree(df, attributes, parentNode, pruning)
+    # Create tree object using buildTree function
+    tree = buildTree(df, features, parentNode, pruning)
     print("---------------------------- Finished training. ------------------------------")
     return tree
 """
@@ -275,6 +289,8 @@ and drives the buildTree function.
 :return: the decision tree as a dictionary object.
 """
 
+# --------------------------------------------------------------------------------------- #
+
 # Import all of the data sets.
 tennis_df = pd.read_csv("assets/playtennis_dayremoved.csv")
 census_df = pd.read_csv("assets/census_training.csv")
@@ -285,7 +301,7 @@ census_test = pd.read_csv("assets/census_training_test.csv")
 censusTree = treeBuilder(census_df, pruning = False)
 # Build another tree from census training but with pruning this time.
 censusTreePrune = treeBuilder(census_df, pruning = True)
-#Build a tree from the tennis training dataset. Set pruning to false because the dataset is < 30 lines in total.
+# Build a tree from the tennis training dataset. Set pruning to false because the dataset is < 30 lines in total.
 tennisTree = treeBuilder(tennis_df, pruning = False)
 
 # Run the compareAgainst function to test the tree against the census_training_test dataset.
