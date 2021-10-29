@@ -6,6 +6,11 @@ import pandas as pd
 import numpy as np
 
 def getEntropy(df):
+    """
+    Helper function that returns the calculated entropy of a dataset.
+    :param df: a pandas dataframe object containing a row of features and rows of values.
+    :return: the calculated entropy value.
+    """
     # To make this function generic, get the class label
     className = df.keys()[-1]
     # Initialize entropy to 0
@@ -19,13 +24,14 @@ def getEntropy(df):
         # Add -(fraction)log2(fraction)
         entropy += -proportion*np.log2(proportion)
     return entropy
-"""
-Helper function that returns the calculated entropy of a dataset.
-:param df: a pandas dataframe object containing a row of features and rows of values.
-:return: the calculated entropy value.
-"""
 
 def getInfoGain (df, attr):
+    """
+    Helper function that returns the information gain of an attribute in a dataframe.
+    :param df: a pandas dataframe object containing a row of features and rows of values.
+    :param attr: the attribute that is being queried for information gain as a string.
+    :return: the calculated information gain value.
+    """
     # To make this function generic, get the class label
     className = df.keys()[-1]
     # targetVariables are the yes/no or >50k/<=50k values
@@ -75,14 +81,15 @@ def getInfoGain (df, attr):
 
     # Information gain
     return getEntropy(df)-summation
-"""
-Helper function that returns the information gain of an attribute in a dataframe.
-:param df: a pandas dataframe object containing a row of features and rows of values.
-:param attr: the attribute that is being queried for information gain as a string.
-:return: the calculated information gain value.
-"""
 
 def bestFeature(df, features):
+    """
+    Helper function that returns the best feature in a particular dataset or partition of a data set
+    for partitioning, based on information gain.
+    :param df: a pandas dataframe object containing a row of features and rows of values.
+    :param features: a pandas index object containing the feature names.
+    :return: the best feature for data partitioning as a string.
+    """
     # Initialize a dictionary for info gain from each feature
     infoGain = {}
     # Current counter
@@ -108,15 +115,15 @@ def bestFeature(df, features):
         best = features[0]
         return best
     return maxAttr
-"""
-Helper function that returns the best feature in a particular dataset or partition of a data set
-for partitioning, based on information gain.
-:param df: a pandas dataframe object containing a row of features and rows of values.
-:param features: a pandas index object containing the feature names.
-:return: the best feature for data partitioning as a string.
-"""
 
 def majority(df, className):
+    """
+    Helper function that returns the most common feature in a pandas dataframe. Useful
+    in building the decision tree using ID3.
+    :param df: a pandas dataframe object containing a row of features and rows of values.
+    :param className: the target class (last column name) in the dataframe.
+    :return: the most common value as a string.
+    """
     # Get a series containing each target level and their associated quantities
     targetValues = pd.value_counts(df[className].values.ravel())
     # Get the labels within target values (yes or no, etc.)
@@ -139,15 +146,17 @@ def majority(df, className):
         # Increment maxIndex
         maxIndex += 1
     return majority
-"""
-Helper function that returns the most common feature in a pandas dataframe. Useful
-in building the decision tree using ID3.
-:param df: a pandas dataframe object containing a row of features and rows of values.
-:param className: the target class (last column name) in the dataframe.
-:return: the most common value as a string.
-"""
 
 def buildTree(df, features, parentNode, pruning):
+    """
+    Tree building function that uses the ID3 algorithm to build a decision tree using the previously defined
+    helper functions. Function returns a nested dictionary object which can be visualized using graphviz library.
+    :param df: a pandas dataframe object containing a row of features and rows of values.
+    :param features: a pandas index object containing the feature names.
+    :param parentNode: a pandas dataframe object which is passed as the parent node in the decision tree.
+    :param pruning: a boolean value that determines whether or not to implement tree pruning.
+    :return: a nested dictionary object which represents a decision tree built from the input data set.
+    """
     # Get the target class name
     className = df.keys()[-1]
 
@@ -198,17 +207,16 @@ def buildTree(df, features, parentNode, pruning):
             # Assign the subtree to best,val indices of the root
             root[best][val] = subtree
         return root
-"""
-Tree building function that uses the ID3 algorithm to build a decision tree using the previously defined
-helper functions. Function returns a nested dictionary object which can be visualized using graphviz library.
-:param df: a pandas dataframe object containing a row of features and rows of values.
-:param features: a pandas index object containing the feature names.
-:param parentNode: a pandas dataframe object which is passed as the parent node in the decision tree.
-:param pruning: a boolean value that determines whether or not to implement tree pruning.
-:return: a nested dictionary object which represents a decision tree built from the input data set.
-"""
 
 def predict(tree, row):
+    """
+    This function accepts a completed decision tree nested dictionary object, as well as
+    a row of a pandas dataframe (as a series object) and queries the decision tree to
+    determine the predicted class value.
+    :param tree: a dictionary object which represents a decision tree built with buildTree.
+    :param row: a row of a pandas dataframe object which is used to query the decision tree.
+    :return: a class value conclusion in the form of a string stored at a leaf node in the decision tree.
+    """
     # If it is a leaf node
     if not isinstance(tree, dict):
         # Return value
@@ -224,16 +232,16 @@ def predict(tree, row):
             return predict(tree[root][featureValue], row)
         else:
             return predict(tree[root][list(tree[root].keys())[0]], row)
-"""
-This function accepts a completed decision tree nested dictionary object, as well as
-a row of a pandas dataframe (as a series object) and queries the decision tree to
-determine the predicted class value.
-:param tree: a dictionary object which represents a decision tree built with buildTree.
-:param row: a row of a pandas dataframe object which is used to query the decision tree.
-:return: a class value conclusion in the form of a string stored at a leaf node in the decision tree.
-"""
 
 def compareAgainst(df, tree):
+    """
+    This function accepts a pandas dataframe object and a completed decision tree
+    in order to iterate through the dataframe and compare its class values to the values
+    determined by the prediction function and the decision tree.
+    :param df: a pandas dataframe object containing a row of features and rows of values.
+    :param tree: a dictionary object which represents a decision tree built with buildTree.
+    :return: the most common value as a string.
+    """
     print("---------- TESTING STARTED ----------")
     print()
     # Obtain class label name from dataframe (last column name)
@@ -260,16 +268,16 @@ def compareAgainst(df, tree):
     print("Accuracy = " + str(accuracy) + "%")
     print()
     print("----------- TESTING ENDED -----------")
-"""
-This function accepts a pandas dataframe object and a completed decision tree
-in order to iterate through the dataframe and compare its class values to the values
-determined by the prediction function and the decision tree.
-:param df: a pandas dataframe object containing a row of features and rows of values.
-:param tree: a dictionary object which represents a decision tree built with buildTree.
-:return: the most common value as a string.
-"""
 
 def treeBuilder(df, pruning):
+    """
+    Helper function that accepts a pandas dataframe object and a boolean value to determine whether
+    or not to implement tree pruning during the tree building operation. Prints useful console output information
+    and drives the buildTree function.
+    :param df: a pandas dataframe object containing a row of features and rows of values.
+    :param pruning: a boolean value which signals to the buildTree function whether to use pruning or not.
+    :return: the decision tree as a dictionary object.
+    """
     rows = len(df)
     print("---------- Training started on " + str(rows) + " examples with pruning = " + str(pruning) + ". -----------")
     # Create list of features
@@ -280,14 +288,6 @@ def treeBuilder(df, pruning):
     tree = buildTree(df, features, parentNode, pruning)
     print("---------------------------- Finished training. ------------------------------")
     return tree
-"""
-Helper function that accepts a pandas dataframe object and a boolean value to determine whether
-or not to implement tree pruning during the tree building operation. Prints useful console output information
-and drives the buildTree function.
-:param df: a pandas dataframe object containing a row of features and rows of values.
-:param pruning: a boolean value which signals to the buildTree function whether to use pruning or not.
-:return: the decision tree as a dictionary object.
-"""
 
 # --------------------------------------------------------------------------------------- #
 
